@@ -1,0 +1,93 @@
+{
+  "best_params": {
+    "bb_tolerance": 1.001,
+    "volume_multiplier": 3.5,
+    "rsi_threshold": 25,
+    "stop_loss": 0.5,
+    "take_profit": 0.5,
+    "avg_return": -20.168855644250414,
+    "avg_win_rate": 3.55674967591302,
+    "total_trades": 2721,
+    "avg_trades_per_day": 272.1,
+    "train_return": -20.168855644250414,
+    "val_return": -18.291812267039262,
+    "val_win_rate": 2.083119693022635,
+    "val_avg_trades": 236.4,
+    "performance_drop": -1.8770433772111517
+  },
+  "all_validation_results": [
+    {
+      "bb_tolerance": 1.001,
+      "volume_multiplier": 3.5,
+      "rsi_threshold": 25,
+      "stop_loss": 0.5,
+      "take_profit": 0.5,
+      "avg_return": -20.168855644250414,
+      "avg_win_rate": 3.55674967591302,
+      "total_trades": 2721,
+      "avg_trades_per_day": 272.1,
+      "train_return": -20.168855644250414,
+      "val_return": -18.291812267039262,
+      "val_win_rate": 2.083119693022635,
+      "val_avg_trades": 236.4,
+      "performance_drop": -1.8770433772111517
+    },
+    {
+      "bb_tolerance": 1.001,
+      "volume_multiplier": 3.5,
+      "rsi_threshold": 25,
+      "stop_loss": 0.5,
+      "take_profit": 0.8,
+      "avg_return": -20.168855644250414,
+      "avg_win_rate": 3.55674967591302,
+      "total_trades": 2721,
+      "avg_trades_per_day": 272.1,
+      "train_return": -20.168855644250414,
+      "val_return": -18.291812267039262,
+      "val_win_rate": 2.083119693022635,
+      "val_avg_trades": 236.4,
+      "performance_drop": -1.8770433772111517
+    },
+    {
+      "bb_tolerance": 1.001,
+      "volume_multiplier": 3.5,
+      "rsi_threshold": 25,
+      "stop_loss": 0.5,
+      "take_profit": 1.0,
+      "avg_return": -20.168855644250414,
+      "avg_win_rate": 3.55674967591302,
+      "total_trades": 2721,
+      "avg_trades_per_day": 272.1,
+      "train_return": -20.168855644250414,
+      "val_return": -18.291812267039262,
+      "val_win_rate": 2.083119693022635,
+      "val_avg_trades": 236.4,
+      "performance_drop": -1.8770433772111517
+    }
+  ],
+  "train_days": [
+    "20250101",
+    "20250110",
+    "20250112",
+    "20250118",
+    "20250123",
+    "20250201",
+    "20250209",
+    "20250302",
+    "20250510",
+    "20250515"
+  ],
+  "validation_days": [
+    "20250103",
+    "20250116",
+    "20250204",
+    "20250219",
+    "20250223",
+    "20250422",
+    "20250503",
+    "20250506",
+    "20250524",
+    "20250526"
+  ],
+  "timestamp": "20251012_143522"
+}

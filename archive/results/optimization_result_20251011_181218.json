@@ -1,0 +1,101 @@
+{
+  "best_params": {
+    "rsi_range": [
+      30,
+      60
+    ],
+    "volume_multiplier": 1.1,
+    "stop_loss": 2.0,
+    "take_profit": 0.5,
+    "avg_return": -1.6856636429263339,
+    "avg_win_rate": 47.61904761904761,
+    "total_trades": 45,
+    "avg_trades_per_day": 4.5,
+    "train_return": -1.6856636429263339,
+    "val_return": -0.4591598264534655,
+    "val_win_rate": 42.19444444444444,
+    "val_avg_trades": 4.6,
+    "performance_drop": -1.2265038164728683
+  },
+  "all_validation_results": [
+    {
+      "rsi_range": [
+        30,
+        60
+      ],
+      "volume_multiplier": 1.1,
+      "stop_loss": 2.0,
+      "take_profit": 0.5,
+      "avg_return": -1.6856636429263339,
+      "avg_win_rate": 47.61904761904761,
+      "total_trades": 45,
+      "avg_trades_per_day": 4.5,
+      "train_return": -1.6856636429263339,
+      "val_return": -0.4591598264534655,
+      "val_win_rate": 42.19444444444444,
+      "val_avg_trades": 4.6,
+      "performance_drop": -1.2265038164728683
+    },
+    {
+      "rsi_range": [
+        30,
+        60
+      ],
+      "volume_multiplier": 1.2,
+      "stop_loss": 2.0,
+      "take_profit": 0.5,
+      "avg_return": -1.6851238065873055,
+      "avg_win_rate": 47.61904761904761,
+      "total_trades": 45,
+      "avg_trades_per_day": 4.5,
+      "train_return": -1.6851238065873055,
+      "val_return": -0.4609784595221479,
+      "val_win_rate": 42.19444444444444,
+      "val_avg_trades": 4.6,
+      "performance_drop": -1.2241453470651575
+    },
+    {
+      "rsi_range": [
+        30,
+        60
+      ],
+      "volume_multiplier": 1.15,
+      "stop_loss": 2.0,
+      "take_profit": 0.5,
+      "avg_return": -1.6854718845751406,
+      "avg_win_rate": 47.61904761904761,
+      "total_trades": 45,
+      "avg_trades_per_day": 4.5,
+      "train_return": -1.6854718845751406,
+      "val_return": -0.4609784595221479,
+      "val_win_rate": 42.19444444444444,
+      "val_avg_trades": 4.6,
+      "performance_drop": -1.2244934250529926
+    }
+  ],
+  "train_days": [
+    "20250122",
+    "20250131",
+    "20250202",
+    "20250309",
+    "20250314",
+    "20250406",
+    "20250423",
+    "20250429",
+    "20250527",
+    "20250530"
+  ],
+  "validation_days": [
+    "20250126",
+    "20250204",
+    "20250306",
+    "20250315",
+    "20250318",
+    "20250324",
+    "20250412",
+    "20250513",
+    "20250522",
+    "20250526"
+  ],
+  "timestamp": "20251011_181218"
+}

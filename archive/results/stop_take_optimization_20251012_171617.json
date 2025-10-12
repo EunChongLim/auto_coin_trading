@@ -1,0 +1,19 @@
+[
+  {
+    "avg_return": -0.7160274902547419,
+    "avg_trades": 7.7,
+    "avg_win_rate": 30.468253968253965,
+    "results": [
+      {
+        "initial_balance": 1000000,
+        "final_balance": 997324.7771460224,
+        "total_return": -0.26752228539775824,
+        "trade_count": 3,
+        "win_count": 1,
+        "loss_count": 2,
+        "win_rate": 33.33333333333333,
+        "trades": [
+          {
+            "type": "BUY",
+            "reason": "HYBRID",
+            "timestamp": 

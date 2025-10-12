@@ -1,3 +1,7 @@
 pyupbit
 pandas
 python-dotenv
+lightgbm
+scikit-learn
+joblib
+imbalanced-learn
