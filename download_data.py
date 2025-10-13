@@ -41,11 +41,11 @@ def download_upbit_data(start_date, end_date, output_dir="data/daily_1m"):
         current += timedelta(days=1)
     
     print("=" * 80)
-    print("📥 Upbit 1분봉 데이터 다운로드 (일자별 CSV)")
+    print("Upbit 1min Data Download (Daily CSV)")
     print("=" * 80)
-    print(f"기간: {start_date} ~ {end_date}")
-    print(f"총 {len(date_list)}일")
-    print(f"저장 위치: {output_dir}/")
+    print(f"Period: {start_date} ~ {end_date}")
+    print(f"Total: {len(date_list)} days")
+    print(f"Save to: {output_dir}/")
     print("=" * 80)
     
     success_count = 0
@@ -63,7 +63,7 @@ def download_upbit_data(start_date, end_date, output_dir="data/daily_1m"):
         # 이미 존재하면 스킵
         if os.path.exists(csv_path):
             df = pd.read_csv(csv_path)
-            print(f"[{i}/{len(date_list)}] {date_str} ⏭️  이미 존재 ({len(df):,}개)")
+            print(f"[{i}/{len(date_list)}] {date_str} - Already exists ({len(df):,})")
             success_count += 1
             total_candles += len(df)
             continue
@@ -88,29 +88,29 @@ def download_upbit_data(start_date, end_date, output_dir="data/daily_1m"):
                     df = pd.read_csv(csv_path)
                     success_count += 1
                     total_candles += len(df)
-                    print(f"✅ {len(df):,}개 캔들")
+                    print(f"OK {len(df):,} candles")
                     
                     # zip 파일만 삭제 (CSV는 보관)
                     os.remove(zip_path)
                 else:
-                    print("❌ CSV 파일 없음")
+                    print("ERR No CSV file")
                     fail_count += 1
                     if os.path.exists(zip_path):
                         os.remove(zip_path)
             
             elif response.status_code == 404:
-                print("⚠️ 데이터 없음 (404)")
+                print("WARN No data (404)")
                 fail_count += 1
             
             else:
-                print(f"❌ 오류 ({response.status_code})")
+                print(f"ERR Error ({response.status_code})")
                 fail_count += 1
             
             # Rate Limit 방지
             time.sleep(0.1)
         
         except Exception as e:
-            print(f"❌ 예외: {e}")
+            print(f"ERR Exception: {e}")
             fail_count += 1
             if os.path.exists(zip_path):
                 os.remove(zip_path)
@@ -118,13 +118,13 @@ def download_upbit_data(start_date, end_date, output_dir="data/daily_1m"):
     
     # 통계
     print("\n" + "=" * 80)
-    print("📊 다운로드 완료")
+    print("Download Complete")
     print("=" * 80)
-    print(f"성공: {success_count}일")
-    print(f"실패: {fail_count}일")
-    print(f"성공률: {success_count/(success_count+fail_count)*100:.1f}%")
-    print(f"총 캔들: {total_candles:,}개")
-    print(f"저장 위치: {output_dir}/")
+    print(f"Success: {success_count} days")
+    print(f"Failed: {fail_count} days")
+    print(f"Success rate: {success_count/(success_count+fail_count)*100:.1f}%")
+    print(f"Total candles: {total_candles:,}")
+    print(f"Save to: {output_dir}/")
     print("=" * 80)
     
     return output_dir

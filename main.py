@@ -11,6 +11,7 @@ import numpy as np
 import time
 import datetime
 import joblib
+import requests
 from indicators import add_all_indicators
 from multi_timeframe_features import add_multi_timeframe_features
 
@@ -161,17 +162,79 @@ def run_live_trading(ticker="KRW-BTC",
     win_count = 0
     total_profit = 0
     
-    # 초기 데이터 로드 (최대 200개 = pyupbit 최대값)
-    # 60분 RSI(14) 계산을 위해서는 60×14=840개 필요하지만
-    # 실제로는 리샘플링 후 일부 NaN은 허용 (최신 데이터만 필요)
-    print("\n[Step 2] Loading initial 1-minute candle data (max 200)...")
-    df = get_minute_ohlcv(ticker, interval=1, count=200)
+    # 초기 데이터 로드
+    # 24시간(1440분) = 백테스트와 동일한 윈도우 크기
+    # pyupbit는 한 번에 최대 200개만 가능하므로 8번 호출 필요
+    print("\n[Step 2] Loading initial 1-minute candle data (1440 minutes = 24 hours)...")
     
-    if df is None or len(df) < 100:
-        print("[ERROR] Failed to load initial data! Need at least 100 candles.")
+    # 1440개 로드 (200개씩 8번)
+    all_dfs = []
+    print("   Loading in batches of 200...")
+    
+    for i in range(8):
+        try:
+            if i == 0:
+                # 첫 번째: 최신 200개
+                df_temp = get_minute_ohlcv(ticker, interval=1, count=200)
+                if df_temp is not None and len(df_temp) > 0:
+                    print(f"   Batch {i+1}/8: {df_temp.index.min().strftime('%H:%M')} ~ {df_temp.index.max().strftime('%H:%M')} ({len(df_temp)} candles)")
+            else:
+                # 전체 누적 데이터의 가장 오래된 시간 사용 (중복 제거)
+                combined_df = pd.concat(all_dfs).sort_index()
+                combined_df = combined_df[~combined_df.index.duplicated(keep='last')]
+                oldest_time = combined_df.index.min()
+                
+                # oldest_time을 그대로 to로 사용 (중복은 나중에 제거)
+                to_param = oldest_time.strftime("%Y-%m-%dT%H:%M:%S") + "+09:00"  # ISO 8601 형식 (T 포함)
+                
+                # 직접 Upbit API 호출 (pyupbit는 timezone을 제거하므로)
+                url = "https://api.upbit.com/v1/candles/minutes/1"
+                params = {
+                    "market": ticker,
+                    "to": to_param,
+                    "count": 200
+                }
+                
+                response = requests.get(url, params=params)
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    if len(data) > 0:
+                        
+                        # DataFrame 변환
+                        df_temp = pd.DataFrame(data)
+                        df_temp = df_temp[['candle_date_time_kst', 'opening_price', 'high_price', 'low_price', 'trade_price', 'candle_acc_trade_volume']]
+                        df_temp.columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+                        df_temp['timestamp'] = pd.to_datetime(df_temp['timestamp'])
+                        df_temp = df_temp.set_index('timestamp').sort_index()
+                        print(f"   Batch {i+1}/8: {df_temp.index.min().strftime('%H:%M')} ~ {df_temp.index.max().strftime('%H:%M')} ({len(df_temp)} candles)")
+                    else:
+                        df_temp = None
+                else:
+                    print(f"   [ERROR] API request failed: {response.status_code}")
+                    df_temp = None
+            
+            if df_temp is not None and len(df_temp) > 0:
+                all_dfs.append(df_temp)
+            else:
+                print(f"   No more data (stopping at batch {i+1}/8)")
+                break
+            
+            time.sleep(0.1)  # API 제한 방지
+            
+        except Exception as e:
+            print(f"   Batch {i+1}/8: Error - {e}")
+            break
+    
+    # 합치고 중복 제거
+    if len(all_dfs) > 0:
+        df = pd.concat(all_dfs).sort_index()
+        df = df[~df.index.duplicated(keep='last')]
+        print(f"\n[OK] Loaded {len(df)} candles from {len(all_dfs)} batches")
+    else:
+        print("[ERROR] Failed to load initial data!")
         return
     
-    print(f"[OK] Loaded {len(df)} candles (sufficient for 60min indicators)")
     print(f"   Time range: {df.index[0]} ~ {df.index[-1]}")
     
     print("\n" + "=" * 80)
@@ -197,8 +260,13 @@ def run_live_trading(ticker="KRW-BTC",
                     
                     # 새로운 완성 캔들만 추가 (중복 방지)
                     if completed_candle.index[0] not in df.index:
-                        df = pd.concat([df.iloc[1:], completed_candle])  # 슬라이딩 윈도우
-                        print(f"\n[{current_time.strftime('%Y-%m-%d %H:%M:%S')}] New completed candle added: {completed_candle.index[0]}")
+                        df = pd.concat([df, completed_candle]).sort_index()
+                        
+                        # 1440개 유지 (24시간 슬라이딩 윈도우)
+                        if len(df) > 1440:
+                            df = df.iloc[-1440:]
+                        
+                        print(f"\n[{current_time.strftime('%Y-%m-%d %H:%M:%S')}] New candle added: {completed_candle.index[0]} (window: {len(df)})")
                     
                     last_update_minute = current_minute
                     
