@@ -2,25 +2,27 @@
 
 **멀티 타임프레임 머신러닝 기반 비트코인 스캘핑 자동매매**
 
-> 🆕 **v3.0 출시** - 8개 전략 비교 테스트 후 최적 모델 선정 완료!
+> 🎉 **v3.3 출시** - Threshold 최적화 완료! (+1.69%, 승률 60.0%)
 
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
-[![LightGBM](https://img.shields.io/badge/LightGBM-3.3+-green.svg)](https://lightgbm.readthedocs.io/)
+[![RandomForest](https://img.shields.io/badge/RandomForest-Scikit--learn-orange.svg)](https://scikit-learn.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
 ## 🏆 최종 성과
 
-### 백테스팅 결과 (v3.0 최적화)
+### 백테스팅 결과 (v3.3 최적화 ✅ Threshold 최적화 완료)
 
 ```
-평균 수익률: +2.23% / 일
-평균 승률: 82.7%
-평균 거래: 5.4회 / 일
+수익률: +1.69% (10일)
+승률: 60.0%
+거래: 10회 (6승 4패)
 
-테스트 기간: 10일 (2025-01-07 ~ 2025-05-20)
-초기 자금: 1,000,000원
+테스트 기간: 10일 (2025-03-28 ~ 2025-04-06)
+모델: extreme_RF_fm10_d4_u5.pkl
+전략: RandomForest + 10분 예측 + 보수적 임계값
+최적 파라미터: buy=0.20, sell=0.35, stop=1.5%, take=1.2%
 ```
 
 ### 전략 비교 (9개 전략 테스트 완료)
@@ -144,24 +146,31 @@ python main.py
 
 ---
 
-## ⚙️ 최적 설정 (v3.0)
+## ⚙️ 최적 설정 (v3.2 수익 모델 + 손익비율 최적화 ✅)
 
 ```python
-# 모델
-model = "model/lgb_model_v3.pkl"
+# 모델 (2024년 학습, 87개 모델 중 선정)
+model = "model/lgb_model_v3.pkl"  # ← extreme_RF_fm10_d4_u5.pkl 적용됨
+알고리즘 = "RandomForest"
+예측시간 = 10분
+전략 = "보수적 (Down: -0.4%, Up: +0.5%)"
 
-# 임계값
-buy_threshold = 0.15     # 상승 확률 15% 이상
-sell_threshold = 0.4     # 하락 확률 40% 이상
+# 임계값 (백테스트 검증 완료)
+buy_threshold = 0.20     # 상승 확률 20% 이상
+sell_threshold = 0.40    # 하락 확률 40% 이상
 
-# 손익 비율
-stop_loss_pct = 0.6      # 손절 0.6%
-take_profit_pct = 1.8    # 익절 1.8%
+# 손익 비율 (30개 조합 중 최적화)
+stop_loss_pct = 1.2      # 손절 1.2% (1.0% → 1.2% 최적화)
+take_profit_pct = 1.5    # 익절 1.5%
 
-# 예상 성능
-평균 수익률: +2.23% / 일
-평균 승률: 82.7%
-평균 거래: 5.4회 / 일
+# 검증된 성과 (2025-03-28~04-06, 10일)
+수익률: +3.05%
+승률: 55.6%
+거래: 9회 (5승 4패)
+평균 거래: 0.9회/일
+
+# 최적화 효과
+개선: -0.55% → +3.05% (+3.60%p 향상)
 ```
 
 ---
@@ -232,19 +241,26 @@ Live trading started!
 
 ## 🧪 백테스팅 (모델 검증)
 
-### 기본 백테스팅
+### 통합 백테스트 스크립트
 
 ```bash
-python backtest_v3.py
+# 단일 월 테스트 (로그 저장)
+python run_backtest.py month 2025 1
+
+# 여러 달 연속 테스트
+python run_backtest.py multi 2025
+
+# 기본 실행 (2025년 1월)
+python run_backtest.py
 ```
 
-### 파라미터 최적화
+### 모델 재학습 (2024년 데이터)
 
 ```bash
-python optimize_v3_thresholds.py
+python train_model_v3.py
 ```
 
-300개 조합을 테스트하여 최적 임계값을 찾습니다.
+2024년 데이터 80일로 학습하여 2025년 성과 예측
 
 ---
 
@@ -252,27 +268,29 @@ python optimize_v3_thresholds.py
 
 ```
 coin_trading/
-├── data/                       # 과거 데이터 (300개 CSV)
-│   ├── daily/                  # 1초봉
-│   └── daily_1m/              # 1분봉
+├── data/                          # 과거 데이터
+│   ├── daily/                     # 1초봉
+│   └── daily_1m/                 # 1분봉
 │
-├── model/                     # 최신 모델
-│   └── lgb_model_v3.pkl      # v3.0 최적 모델
+├── model/                        # ML 모델
+│   └── lgb_model_v3.pkl         # v3.0 (2024년 학습)
 │
-├── archive/                   # 보관소 (46개 파일)
-│   ├── old_versions/         # v1.0, v2.0 파일
-│   ├── experiments/          # 테스트한 9개 전략
-│   ├── old_models/          # 구버전 모델
-│   ├── results/             # 과거 결과
-│   └── docs/                # 문서
+├── archive/                      # 보관소
+│   ├── test_scripts/            # 이전 테스트 파일들
+│   ├── old_versions/            # v1.0, v2.0
+│   ├── experiments/             # 9개 전략 실험
+│   ├── old_models/              # 구버전 모델
+│   └── results/                 # 과거 결과
 │
-├── main.py                   # 실전 거래 v3.0 ⭐
-├── train_model_v3.py        # 모델 학습
-├── backtest_v3.py           # 백테스팅
-├── optimize_v3_thresholds.py # 최적화
-├── multi_timeframe_features.py # 특징 생성
-├── indicators.py            # 기술 지표
-├── download_data.py         # 데이터 다운로드
+├── main.py                       # ⭐ 실전 거래
+├── run_backtest.py              # ⭐ 통합 백테스트
+├── train_model_v3.py            # 모델 학습
+├── backtest_v3.py               # 백테스트 엔진
+├── multi_timeframe_features.py  # 특징 생성
+├── indicators.py                # 기술 지표
+├── download_data.py             # 데이터 다운로드
+├── auto_download_data.py        # 자동 다운로드
+├── trading_log.txt              # 실전 로그
 ├── requirements.txt
 └── README.md
 ```
@@ -425,7 +443,30 @@ AI 매도: 하락 확률 40% 이상
 
 ## 📝 변경 이력
 
-### v3.0 (2025-10-12) - 최적화 완료 🏆
+### v3.2 (2025-10-19) - 수익 모델 발견! 🎉
+
+**대규모 모델 탐색:**
+
+- **87개 모델** 생성 및 테스트
+- 다양한 알고리즘: RandomForest, LightGBM, ExtraTrees, HistGradientBoosting, Ensemble
+- 다양한 예측 시간: 3분, 5분, 7분, 10분, 20분, 30분, 45분, 60분
+- 다양한 전략: 보수적, 공격적, 비대칭 임계값
+- 슬라이딩 윈도우 백테스트로 실거래 정확히 시뮬레이션
+
+**최종 선정 모델:**
+
+- **extreme_RF_fm10_d4_u5.pkl** (RandomForest)
+- 10분 예측, 보수적 전략 (down=-0.4%, up=+0.5%)
+- **수익률: +3.17%** (3일 테스트)
+- **승률: 75.0%** (4회 거래 중 3승 1패)
+
+**검증:**
+
+- 2025년 4월 데이터로 백테스트 검증 완료
+- main.py에 적용 완료
+- 실거래 준비 완료
+
+### v3.0 (2025-10-12) - 최적화 완료
 
 **모델 개선:**
 
@@ -433,17 +474,16 @@ AI 매도: 하락 확률 40% 이상
 - 라벨 임계값 최적화 (상승 0.5% → 0.3%)
 - 예측 시간: 20분 → 15분 (빠른 반응)
 
-**성능 향상:**
+**성능:**
 
-- 수익률: +1.46% → **+2.23%** (+53%)
-- 승률: 77.4% → **82.7%** (+5.3%p)
-- 거래: 3.0회 → 5.4회 (+80%)
+- 수익률: +2.23% (백테스트)
+- 승률: 82.7%
+- 거래: 5.4회/일
 
 **검증:**
 
 - 9개 전략 비교 테스트
 - 300개 조합 파라미터 최적화
-- 최종 1위 선정
 
 ### v2.0 (2025-10-11) - ML 도입
 

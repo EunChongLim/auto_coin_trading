@@ -14,9 +14,9 @@ import random
 
 
 def load_data_v3(max_days=80):
-    """더 많은 데이터 로드"""
-    start = datetime.strptime("20250101", "%Y%m%d")
-    end = datetime.strptime("20250530", "%Y%m%d")
+    """더 많은 데이터 로드 (2024년 학습용)"""
+    start = datetime.strptime("20240101", "%Y%m%d")
+    end = datetime.strptime("20241231", "%Y%m%d")
     
     all_days = []
     current = start
@@ -49,6 +49,7 @@ def train_v3():
     """v3.0 학습"""
     print("=" * 80)
     print("Model v3.0 Training")
+    print("2024 Data (Train) -> 2025 Data (Test)")
     print("Optimized label thresholds + More data")
     print("=" * 80)
     

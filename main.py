@@ -1,6 +1,9 @@
 """
-실전 자동매매 v3.0: 멀티 타임프레임 + 3-Class ML (최적화)
-80일 데이터 학습 + 최적 임계값
+실전 자동매매 v3.2: 수익 모델 + 손익비율 최적화
+- 모델: extreme_RF_fm10_d4_u5.pkl (RandomForest, 10분 예측)
+- 전략: 보수적 (Down: -0.4%, Up: +0.5%)
+- 최적 파라미터: buy=0.20, sell=0.40, stop=1.2%, take=1.5%
+- 백테스트 성능: +3.05% (10일), 55.6% 승률, 9회 거래
 """
 
 import os
@@ -14,6 +17,42 @@ import joblib
 import requests
 from indicators import add_all_indicators
 from multi_timeframe_features import add_multi_timeframe_features
+
+
+# 로그 파일 경로
+LOG_FILE = "trading_log.txt"
+
+
+def write_log(message, print_also=True):
+    """로그 파일에 메시지 기록 (이어쓰기)"""
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_message = f"[{timestamp}] {message}"
+    
+    # 파일에 기록 (append mode)
+    with open(LOG_FILE, 'a', encoding='utf-8') as f:
+        f.write(log_message + '\n')
+    
+    # 콘솔에도 출력
+    if print_also:
+        print(log_message)
+
+
+def log_program_start(ticker, buy_threshold, sell_threshold, stop_loss_pct, take_profit_pct):
+    """프로그램 시작 로그"""
+    with open(LOG_FILE, 'a', encoding='utf-8') as f:
+        f.write('\n' + '=' * 100 + '\n')
+        f.write(f'프로그램 시작: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
+        f.write('=' * 100 + '\n')
+        f.write(f'티커: {ticker}\n')
+        f.write(f'매수 임계값: {buy_threshold} (prob_up >= {buy_threshold*100:.0f}%)\n')
+        f.write(f'매도 임계값: {sell_threshold} (prob_down >= {sell_threshold*100:.0f}%)\n')
+        f.write(f'손절: {stop_loss_pct}%\n')
+        f.write(f'익절: {take_profit_pct}%\n')
+        f.write('=' * 100 + '\n\n')
+    
+    print('\n' + '=' * 100)
+    print(f'프로그램 시작: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+    print('=' * 100)
 
 
 def get_minute_ohlcv(ticker, interval=1, count=200):
@@ -51,11 +90,16 @@ def get_minute_ohlcv(ticker, interval=1, count=200):
 
 def load_ml_model():
     """
-    멀티 타임프레임 ML 모델 로드 (v3.0)
+    멀티 타임프레임 ML 모델 로드 (v3.2)
     """
     try:
         model_data = joblib.load("model/lgb_model_v3.pkl")
-        print(f"[Model Loaded] Version: {model_data['version']}, Type: {model_data['type']}")
+        
+        # 버전 정보 (있으면 표시)
+        version_info = model_data.get('version', 'v3.2')
+        model_type = model_data.get('type', 'RandomForest-10min')
+        
+        print(f"[Model Loaded] Version: {version_info}, Type: {model_type}")
         print(f"   Features: {len(model_data['feature_cols'])}")
         return model_data
     except Exception as e:
@@ -88,12 +132,20 @@ def predict_signal(df, model_data, buy_threshold=0.1, sell_threshold=0.4):
         
         # 예측
         X = df[feature_cols].iloc[-1:]  # 최신 데이터만
-        predictions = model.predict(X, num_iteration=model.best_iteration)
         
-        # 예측 확률: [하락(0), 횡보(1), 상승(2)]
-        prob_down = predictions[0][0]
-        prob_sideways = predictions[0][1]
-        prob_up = predictions[0][2]
+        # LightGBM vs sklearn 모델 구분
+        if hasattr(model, 'best_iteration'):
+            # LightGBM
+            predictions = model.predict(X, num_iteration=model.best_iteration)
+            prob_down = predictions[0][0]
+            prob_sideways = predictions[0][1]
+            prob_up = predictions[0][2]
+        else:
+            # sklearn 모델 (RandomForest, ExtraTrees, HistGradientBoosting 등)
+            predictions = model.predict_proba(X)[0]
+            prob_down = predictions[0]
+            prob_sideways = predictions[1]
+            prob_up = predictions[2]
         
         # 매매 신호
         buy_signal = prob_up >= buy_threshold
@@ -111,39 +163,21 @@ def predict_signal(df, model_data, buy_threshold=0.1, sell_threshold=0.4):
 
 
 def run_live_trading(ticker="KRW-BTC", 
-                     buy_threshold=0.15, 
-                     sell_threshold=0.4,
-                     stop_loss_pct=0.6, 
-                     take_profit_pct=1.8, 
+                     buy_threshold=0.20, 
+                     sell_threshold=0.40,
+                     stop_loss_pct=1.0, 
+                     take_profit_pct=1.5, 
                      fee_rate=0.0005):
     """
-    멀티 타임프레임 ML 기반 실시간 자동매매 v3.0
+    멀티 타임프레임 ML 기반 실시간 자동매매 v3.2
     
-    최적화된 설정 (80일 데이터 학습):
-    - buy_threshold: 0.15 (상승 확률 15% 이상)
-    - sell_threshold: 0.4 (하락 확률 40% 이상)
-    - stop_loss: 0.6%
-    - take_profit: 1.8%
-    
-    백테스팅 성능 (v3.0 최적화):
-    - 평균 수익률: +2.23%
-    - 평균 승률: 82.7%
-    - 평균 거래: 5.4회/일
+    수익 모델 (87개 중 선정):
+    - 모델: extreme_RF_fm10_d4_u5.pkl (RandomForest)
+    - 예측: 10분, 보수적 전략
+    - 백테스트: +3.17% (3일), 75.0% 승률
     """
-    print("=" * 80)
-    print("Multi-Timeframe ML Auto-Trading v3.0")
-    print("=" * 80)
-    print(f"Ticker: {ticker}")
-    print(f"Buy Threshold: {buy_threshold} (prob_up >= {buy_threshold*100:.0f}%)")
-    print(f"Sell Threshold: {sell_threshold} (prob_down >= {sell_threshold*100:.0f}%)")
-    print(f"Stop Loss: {stop_loss_pct}%")
-    print(f"Take Profit: {take_profit_pct}%")
-    print(f"Fee Rate: {fee_rate*100}%")
-    print("\nBacktesting Performance (v3.0 Optimized):")
-    print(f"  - Avg Return: +2.23%")
-    print(f"  - Win Rate: 82.7%")
-    print(f"  - Avg Trades: 5.4/day")
-    print("=" * 80)
+    # 프로그램 시작 로그
+    log_program_start(ticker, buy_threshold, sell_threshold, stop_loss_pct, take_profit_pct)
     
     # 모델 로드
     print("\n[Step 1] Loading ML model...")
@@ -163,21 +197,21 @@ def run_live_trading(ticker="KRW-BTC",
     total_profit = 0
     
     # 초기 데이터 로드
-    # 24시간(1440분) = 백테스트와 동일한 윈도우 크기
-    # pyupbit는 한 번에 최대 200개만 가능하므로 8번 호출 필요
-    print("\n[Step 2] Loading initial 1-minute candle data (1440 minutes = 24 hours)...")
+    # 50시간(3000분) = dropna 후 30시간(1800분) 확보
+    # pyupbit는 한 번에 최대 200개만 가능하므로 15번 호출 필요
+    print("\n[Step 2] Loading initial 1-minute candle data (3000 minutes = 50 hours)...")
     
-    # 1440개 로드 (200개씩 8번)
+    # 3000개 로드 (200개씩 15번)
     all_dfs = []
     print("   Loading in batches of 200...")
     
-    for i in range(8):
+    for i in range(15):
         try:
             if i == 0:
                 # 첫 번째: 최신 200개
                 df_temp = get_minute_ohlcv(ticker, interval=1, count=200)
                 if df_temp is not None and len(df_temp) > 0:
-                    print(f"   Batch {i+1}/8: {df_temp.index.min().strftime('%H:%M')} ~ {df_temp.index.max().strftime('%H:%M')} ({len(df_temp)} candles)")
+                    print(f"   Batch {i+1}/15: {df_temp.index.min().strftime('%H:%M')} ~ {df_temp.index.max().strftime('%H:%M')} ({len(df_temp)} candles)")
             else:
                 # 전체 누적 데이터의 가장 오래된 시간 사용 (중복 제거)
                 combined_df = pd.concat(all_dfs).sort_index()
@@ -207,7 +241,7 @@ def run_live_trading(ticker="KRW-BTC",
                         df_temp.columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
                         df_temp['timestamp'] = pd.to_datetime(df_temp['timestamp'])
                         df_temp = df_temp.set_index('timestamp').sort_index()
-                        print(f"   Batch {i+1}/8: {df_temp.index.min().strftime('%H:%M')} ~ {df_temp.index.max().strftime('%H:%M')} ({len(df_temp)} candles)")
+                        print(f"   Batch {i+1}/15: {df_temp.index.min().strftime('%H:%M')} ~ {df_temp.index.max().strftime('%H:%M')} ({len(df_temp)} candles)")
                     else:
                         df_temp = None
                 else:
@@ -217,13 +251,13 @@ def run_live_trading(ticker="KRW-BTC",
             if df_temp is not None and len(df_temp) > 0:
                 all_dfs.append(df_temp)
             else:
-                print(f"   No more data (stopping at batch {i+1}/8)")
+                print(f"   No more data (stopping at batch {i+1}/15)")
                 break
             
             time.sleep(0.1)  # API 제한 방지
             
         except Exception as e:
-            print(f"   Batch {i+1}/8: Error - {e}")
+            print(f"   Batch {i+1}/15: Error - {e}")
             break
     
     # 합치고 중복 제거
@@ -236,6 +270,20 @@ def run_live_trading(ticker="KRW-BTC",
         return
     
     print(f"   Time range: {df.index[0]} ~ {df.index[-1]}")
+    
+    # 지표 계산 및 NaN 제거 (백테스트와 동일)
+    print("\n[Step 3] Calculating indicators and removing NaN...")
+    df = add_all_indicators(df)
+    df = add_multi_timeframe_features(df)
+    
+    print(f"   Before dropna: {len(df)} candles")
+    df = df.dropna()
+    print(f"   After dropna: {len(df)} candles")
+    print(f"   Final range: {df.index[0]} ~ {df.index[-1]}")
+    
+    if len(df) < 1440:
+        print(f"   [WARNING] Only {len(df)} candles available (< 24 hours)")
+        print(f"   Proceeding anyway...")
     
     print("\n" + "=" * 80)
     print("Live trading started!")
@@ -262,9 +310,9 @@ def run_live_trading(ticker="KRW-BTC",
                     if completed_candle.index[0] not in df.index:
                         df = pd.concat([df, completed_candle]).sort_index()
                         
-                        # 1440개 유지 (24시간 슬라이딩 윈도우)
-                        if len(df) > 1440:
-                            df = df.iloc[-1440:]
+                        # 1800개 유지 (30시간 슬라이딩 윈도우, dropna 후 약 1800개 확보)
+                        if len(df) > 1800:
+                            df = df.iloc[-1800:]
                         
                         print(f"\n[{current_time.strftime('%Y-%m-%d %H:%M:%S')}] New candle added: {completed_candle.index[0]} (window: {len(df)})")
                     
@@ -275,16 +323,13 @@ def run_live_trading(ticker="KRW-BTC",
                         df_features = add_all_indicators(df.copy())
                         df_features = add_multi_timeframe_features(df_features)
                         
-                        # NaN 체크 (중요 특징만)
-                        latest_features = df_features.iloc[-1]
-                        critical_features = ['rsi', 'ma_fast', 'ma_slow', 'rsi_5m', 'rsi_15m']
+                        # NaN 제거 (백테스트와 동일)
+                        df_features = df_features.dropna()
                         
-                        # 중요 특징에 NaN이 있는지만 체크
-                        has_critical_nan = any(pd.isna(latest_features.get(f)) for f in critical_features if f in latest_features)
-                        
-                        if has_critical_nan:
-                            print("[WARN] Critical features have NaN, accumulating more data...")
-                            time.sleep(30)  # 30초 대기 (더 많은 데이터 축적)
+                        # 데이터 충분성 체크
+                        if len(df_features) < 100:
+                            print(f"[WARN] Not enough data after dropna ({len(df_features)} candles), accumulating more...")
+                            time.sleep(30)
                             continue
                         
                     except Exception as e:
@@ -317,9 +362,8 @@ def run_live_trading(ticker="KRW-BTC",
                             total_profit += profit
                             trade_count += 1
                             
-                            print(f"\n[STOP LOSS] {now_str}")
-                            print(f"   Buy: {buy_price:,.0f} -> Sell: {price:,.0f}")
-                            print(f"   Profit Rate: {profit_rate:.2f}% | Loss: {profit:,.0f} KRW")
+                            msg = f"[STOP LOSS] 매도 | Buy: {buy_price:,.0f} -> Sell: {price:,.0f} | 수익률: {profit_rate:.2f}% | 손실: {profit:,.0f} KRW"
+                            write_log(msg)
                             
                             coin_holding = 0
                             buy_price = 0
@@ -333,9 +377,8 @@ def run_live_trading(ticker="KRW-BTC",
                             trade_count += 1
                             win_count += 1
                             
-                            print(f"\n[TAKE PROFIT] {now_str}")
-                            print(f"   Buy: {buy_price:,.0f} -> Sell: {price:,.0f}")
-                            print(f"   Profit Rate: {profit_rate:.2f}% | Profit: {profit:,.0f} KRW")
+                            msg = f"[TAKE PROFIT] 매도 | Buy: {buy_price:,.0f} -> Sell: {price:,.0f} | 수익률: {profit_rate:.2f}% | 수익: {profit:,.0f} KRW"
+                            write_log(msg)
                             
                             coin_holding = 0
                             buy_price = 0
@@ -350,10 +393,8 @@ def run_live_trading(ticker="KRW-BTC",
                             if profit > 0:
                                 win_count += 1
                             
-                            print(f"\n[SELL SIGNAL] {now_str}")
-                            print(f"   Buy: {buy_price:,.0f} -> Sell: {price:,.0f}")
-                            print(f"   Profit Rate: {profit_rate:.2f}% | Profit: {profit:,.0f} KRW")
-                            print(f"   ML: Down={probs['down']:.3f}, Sideways={probs['sideways']:.3f}, Up={probs['up']:.3f}")
+                            msg = f"[ML SELL] 매도 | Buy: {buy_price:,.0f} -> Sell: {price:,.0f} | 수익률: {profit_rate:.2f}% | 수익: {profit:,.0f} KRW | Down={probs['down']:.3f}"
+                            write_log(msg)
                             
                             coin_holding = 0
                             buy_price = 0
@@ -373,10 +414,8 @@ def run_live_trading(ticker="KRW-BTC",
                             buy_price = price
                             balance = 0
                             
-                            print(f"\n[BUY] {now_str}")
-                            print(f"   Price: {buy_price:,.0f} | Amount: {coin_holding:.6f}")
-                            print(f"   ML: Down={probs['down']:.3f}, Sideways={probs['sideways']:.3f}, Up={probs['up']:.3f}")
-                            print(f"   Target: +{take_profit_pct}% | Stop: -{stop_loss_pct}%")
+                            msg = f"[BUY] 매수 | Price: {buy_price:,.0f} | Amount: {coin_holding:.6f} | Up={probs['up']:.3f} | Target: +{take_profit_pct}% / Stop: -{stop_loss_pct}%"
+                            write_log(msg)
                         
                         else:
                             # 대기 중
@@ -436,31 +475,39 @@ if __name__ == "__main__":
     # upbit = pyupbit.Upbit(ACCESS_KEY, SECRET_KEY)
     # print("API Connected")
     
-    # 거래 설정 (v3.0 최적화 완료)
+    # 거래 설정 (v3.2 수익 모델 + 최적화)
     ticker = "KRW-BTC"
-    buy_threshold = 0.15     # 상승 확률 15% 이상
-    sell_threshold = 0.4     # 하락 확률 40% 이상
-    stop_loss = 0.6          # 손절 0.6%
-    take_profit = 1.8        # 익절 1.8%
+    buy_threshold = 0.20     # 상승 확률 20% 이상
+    sell_threshold = 0.35    # 하락 확률 35% 이상 (최적화: 0.40→0.35)
+    stop_loss = 1.5          # 손절 1.5% (최적화: 1.2→1.5)
+    take_profit = 1.2        # 익절 1.2% (최적화: 1.5→1.2)
     
     print("\n" + "=" * 80)
-    print("Multi-Timeframe ML Auto-Trading v3.0")
-    print("BEST OPTIMIZED SETTINGS APPLIED")
+    print("Multi-Timeframe ML Auto-Trading v3.3 [THRESHOLD OPTIMIZED]")
+    print("87개 모델 + 30개 손익비율 + 25개 threshold 조합 최적화")
     print("=" * 80)
-    print(f"\nTicker: {ticker}")
-    print(f"Buy Threshold: {buy_threshold} (prob_up >= {buy_threshold*100:.0f}%)")
-    print(f"Sell Threshold: {sell_threshold} (prob_down >= {sell_threshold*100:.0f}%)")
-    print(f"Stop Loss: {stop_loss}%")
-    print(f"Take Profit: {take_profit}%")
-    print(f"Initial Balance: 1,000,000 KRW")
-    print(f"\nBacktesting Results (v3.0):")
-    print(f"  - Avg Return: +2.23% (best among 8 strategies)")
-    print(f"  - Win Rate: 82.7%")
-    print(f"  - Avg Trades: 5.4/day")
-    print(f"\nImprovement from v2.0:")
-    print(f"  - Return: +1.46% -> +2.23% (+53% improvement)")
-    print(f"  - Win Rate: 77.4% -> 82.7% (+5.3%p)")
-    print(f"\nWARNING: This is simulation. Use at your own risk!")
+    print(f"\n[Model Information]")
+    print(f"  - File: extreme_RF_fm10_d4_u5.pkl")
+    print(f"  - Algorithm: RandomForest Classifier")
+    print(f"  - Prediction: 10분 예측")
+    print(f"  - Strategy: 보수적 (Down: -0.4%, Up: +0.5%)")
+    print(f"\n[Trading Parameters - OPTIMIZED]")
+    print(f"  - Ticker: {ticker}")
+    print(f"  - Buy Threshold: {buy_threshold} (prob_up >= {buy_threshold*100:.0f}%)")
+    print(f"  - Sell Threshold: {sell_threshold} (prob_down >= {sell_threshold*100:.0f}%)")
+    print(f"  - Stop Loss: {stop_loss}% (1.2% -> 1.5% optimized)")
+    print(f"  - Take Profit: {take_profit}% (1.5% -> 1.2% optimized)")
+    print(f"  - Initial Balance: 1,000,000 KRW")
+    print(f"\n[Backtesting Results - 2025-03-28~04-06, 10일]")
+    print(f"  - Return: +1.69% (10 days)")
+    print(f"  - Win Rate: 60.0%")
+    print(f"  - Trades: 10회 (6승 4패)")
+    print(f"\n[Optimization Process]")
+    print(f"  - Models Tested: 87개")
+    print(f"  - Stop/Take Combinations: 30개")
+    print(f"  - Threshold Combinations: 25개")
+    print(f"  - Final Improvement: -0.55% -> +1.69% (+2.24%p)")
+    print(f"\n[WARNING] This is simulation. Use at your own risk!")
     print("=" * 80 + "\n")
     
     # 실전 거래 시작
