@@ -56,13 +56,13 @@ def train_v3():
     # 더 많은 데이터 로드
     df = load_data_v3(max_days=80)
     
-    # 3-Class 라벨 (임계값 조정)
+    # 3-Class 라벨 (예측 시간 3분으로 축소)
     print("\n[Preparing Data]")
     X, y, feature_cols, _ = prepare_multi_timeframe_data(
         df,
-        future_minutes=15,        # 20분 → 15분 (빠른 반응)
-        down_threshold=-0.002,    # -0.3% → -0.2% (더 민감)
-        up_threshold=0.003        # +0.5% → +0.3% (더 많은 상승 샘플)
+        future_minutes=3,         # 15분 → 3분 (스캘핑용)
+        down_threshold=-0.001,    # -0.2% → -0.1% (더 민감)
+        up_threshold=0.002        # +0.3% → +0.2% (더 많은 상승 샘플)
     )
     
     # 분할
