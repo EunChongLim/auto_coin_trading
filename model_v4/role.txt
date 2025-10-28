@@ -1,0 +1,91 @@
+A. 최소 조합(1–5분 스캘핑 기준, 핵심 8개) — 추측입니다
+    1) 레짐(추세)
+    - 사용: ema50_15m, ema200_15m
+    - 규칙: 롱 = ema50_15m > ema200_15m, 숏 = ema50_15m < ema200_15m
+
+    2) 위치(구조)
+    - 정의: pos60 = (close_1m - low_60m) / (high_60m - low_60m)
+    - 규칙: 롱 진입 후보 = pos60 > 0.35, 숏은 대칭 반전
+
+    3) 유동성(체결 가능성)
+    - 사용: vol_1m, vol_1m_ma20
+    - 규칙: vol_1m > 1.3 * vol_1m_ma20
+
+    4) 변동성(리스크)
+    - 사용: atr14_1m
+    - 목적: 손절폭·포지션 사이징 계산
+
+    5) 변동성(브레이크아웃 탐지)
+    - 사용: bb_width_pct_20_1m = BB폭(20,2)/close
+    - 컨텍스트: p70↑ 추세/추격, p30↓ 리버전 위주
+
+    6) 모멘텀(타이밍 + 확인)
+    - 타이밍: rsi14_1m(레벨/다이버전스)
+    - 확인: macd_hist_1m(기울기 변화)
+
+    7) 멀티타임프레임 추세 일치도
+    - trend_score = Σ sign(ema20_tf - ema50_tf), tf ∈ {1m,5m,15m,60m} ∈ [-4..+4]
+    - 규칙: 롱 ≥ +2, 숏 ≤ -2
+
+    8) 세션 기준선(선택)
+    - vwap_session(당일)
+    - 용도: 리클레임/리젝션과 트리거 결합
+
+B. 신호 규칙(예시, 숫자 포함) — 추측입니다
+    [롱]
+        1) 레짐: ema50_15m > ema200_15m AND trend_score ≥ +2
+        2) 유동성: vol_1m > 1.3 * vol_1m_ma20
+        3) 위치: pos60 > 0.35
+        4) 브레이크아웃 컨텍스트:
+        - bb_width_pct_20_1m ≥ p70  OR  close_1m가 vwap_session 상향 리클레임
+        5) 트리거:
+        - rsi14_1m이 50 상향 재진입 AND macd_hist_1m 증가(t−1 < t)
+        6) 리스크:
+        - 스탑: stop = entry - k * atr14_1m  (권장 k=1.2)
+        - 사이징: size = (equity * risk_pct) / (k * atr14_1m)  (권장 risk_pct=0.5~1.0%)
+        - 청산: +1R 50% 부분청산 → 잔량 ATR 트레일 또는 60m 고점 터치 시 청산
+    [숏]
+        - 모든 부호/위치 조건 반전
+
+C. 컬럼/파라미터 명세(구현 친화) — 추측입니다
+    [EMA (1m)]
+    - ema5_1m, ema20_1m, ema50_1m, ema200_1m
+
+    [EMA (MTF)]
+    - ema20_5m, ema50_5m, ema20_15m, ema50_15m, ema20_60m, ema50_60m
+    - 생성 절차: (1m 시계열) → resample('5T'/'15T'/'60T').last() → EMA → 1m로 ffill
+    - 주의: 상위 TF는 "마감봉"만 사용(룩어헤드 금지), min_periods=window
+
+    [모멘텀/변동성/거래량]
+    - rsi14_1m, macd_hist_1m(12,26,9), atr14_1m, bb_width_pct_20_1m
+    - vol_1m, vol_1m_ma20
+
+    [구조/세션]
+    - high_60m, low_60m, pos60 = (close_1m - low_60m)/(high_60m - low_60m), vwap_session
+
+    [일치도]
+    - trend_score = Σ sign(ema20_tf - ema50_tf), tf ∈ {1m,5m,15m,60m}
+
+    [네이밍 규칙]
+    - SMA/EMA 혼용 시 접두어 분리: sma*, ema* (예: sma5_1m vs ema5_1m)
+
+D. 유지/덜 사용/제거 — 추측입니다
+    [유지(코어)]
+    - EMA20/50(다중 TF), RSI14_1m, MACD 히스토그램, ATR14_1m
+    - BB 폭(20,2), pos60, vwap_session, vol_1m 필터, trend_score
+
+    [덜 사용(보조)]
+    - 캔들 패턴(도지/망치/교수형): 바디/위크 비율 + 위치 필터 있을 때만 보조로 활용
+
+    [제거 후보(중복)]
+    - 동일 역할의 이중 지표(예: 같은 창의 SMA와 EMA 동시 사용)
+    - 실효성 낮은 파생 지표(백테스트 기여도 ≤ 0 또는 상관 > 0.8)
+
+E. 빠른 검증 체크리스트 — 추측입니다
+    1) 룩어헤드 방지: 상위 TF는 마감 후만 갱신, 1m로 ffill 정렬
+    2) 웜업: rolling/ewm에 min_periods=window, 초기 구간 NaN 유지
+    3) 체결 동기화: 백테스트 신호·체결을 "봉 마감가" 기준으로 일치
+    4) 비용 반영: 업비트 수수료·슬리피지(≥ 3~5bp) 적용
+    5) 성능 분석: 제거 실험 또는 Permutation Importance로 피처 기여도 재평가
+    6) 임계값 점검: vol 배수(1.3x), pos60(0.35), ATR k(1.2) 등 주기적 재튜닝
+    7) 레짐 필터: ema50_15m vs ema200_15m 또는 ema50_15m>ema200_15m 기간에 한해 진입
