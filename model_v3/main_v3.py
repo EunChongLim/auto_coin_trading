@@ -140,10 +140,12 @@ def run_live_trading(ticker="KRW-BTC",
     load_dotenv()
     access = os.getenv("UPBIT_ACCESS_KEY")
     secret = os.getenv("UPBIT_SECRET_KEY")
-    upbit = pyupbit.Upbit(access, secret)
+    dry_run = not (access and secret)
+    upbit = pyupbit.Upbit(access, secret) if not dry_run else None
     
     print("\n" + "="*84)
     print("Multi-Timeframe ML Auto-Trading v3.3 [model_v3]")
+    print(f"Mode: {'DRY-RUN (no orders)' if dry_run else 'LIVE'}")
     print("="*84)
     
     # 모델 로드
@@ -255,46 +257,63 @@ def run_live_trading(ticker="KRW-BTC",
             
             # 매수 실행
             if buy_signal:
-                krw_balance = upbit.get_balance("KRW")
-                if krw_balance > 5500:
-                    buy_amount_krw = krw_balance * 0.995
-                    order = upbit.buy_market_order(ticker, buy_amount_krw)
-                    
-                    if order and 'uuid' in order:
-                        time.sleep(0.5)
-                        buy_price = current_price
-                        buy_amount = buy_amount_krw / buy_price
-                        holding = True
+                if dry_run:
+                    log_msg = (f"[DRY-RUN][BUY] 매수 신호 | Price: {current_price:,.0f} | "
+                               f"Up={prob_up:.3f} | Target: +{take_profit_pct}% / Stop: -{stop_loss_pct}%")
+                    write_log(log_msg)
+                else:
+                    krw_balance = upbit.get_balance("KRW")
+                    if krw_balance > 5500:
+                        buy_amount_krw = krw_balance * 0.995
+                        order = upbit.buy_market_order(ticker, buy_amount_krw)
                         
-                        log_msg = (f"[BUY] 매수 | Price: {buy_price:,.0f} | "
-                                 f"Amount: {buy_amount:.6f} | Up={prob_up:.3f} | "
-                                 f"Target: +{take_profit_pct}% / Stop: -{stop_loss_pct}%")
-                        write_log(log_msg)
+                        if order and 'uuid' in order:
+                            time.sleep(0.5)
+                            buy_price = current_price
+                            buy_amount = buy_amount_krw / buy_price
+                            holding = True
+                            
+                            log_msg = (f"[BUY] 매수 | Price: {buy_price:,.0f} | "
+                                     f"Amount: {buy_amount:.6f} | Up={prob_up:.3f} | "
+                                     f"Target: +{take_profit_pct}% / Stop: -{stop_loss_pct}%")
+                            write_log(log_msg)
             
             # 매도 실행
             if sell_signal and holding:
-                coin_balance = upbit.get_balance(ticker.split('-')[1])
-                if coin_balance > 0:
-                    order = upbit.sell_market_order(ticker, coin_balance)
-                    
-                    if order and 'uuid' in order:
-                        time.sleep(0.5)
+                if dry_run:
+                    reason = ""
+                    if sell_by_take:
+                        reason = f"익절 (+{profit_pct:.2f}%)"
+                    elif sell_by_stop:
+                        reason = f"손절 ({profit_pct:.2f}%)"
+                    else:
+                        reason = f"ML 매도 (Down={prob_down:.3f})"
+                    log_msg = (f"[DRY-RUN][SELL] 매도 신호 | Price: {current_price:,.0f} | "
+                               f"Profit: {profit_pct:+.2f}% | {reason}")
+                    write_log(log_msg)
+                else:
+                    coin_balance = upbit.get_balance(ticker.split('-')[1])
+                    if coin_balance > 0:
+                        order = upbit.sell_market_order(ticker, coin_balance)
                         
-                        reason = ""
-                        if sell_by_take:
-                            reason = f"익절 (+{profit_pct:.2f}%)"
-                        elif sell_by_stop:
-                            reason = f"손절 ({profit_pct:.2f}%)"
-                        else:
-                            reason = f"ML 매도 (Down={prob_down:.3f})"
-                        
-                        log_msg = (f"[SELL] 매도 | Price: {current_price:,.0f} | "
-                                 f"Profit: {profit_pct:+.2f}% | {reason}")
-                        write_log(log_msg)
-                        
-                        holding = False
-                        buy_price = 0
-                        buy_amount = 0
+                        if order and 'uuid' in order:
+                            time.sleep(0.5)
+                            
+                            reason = ""
+                            if sell_by_take:
+                                reason = f"익절 (+{profit_pct:.2f}%)"
+                            elif sell_by_stop:
+                                reason = f"손절 ({profit_pct:.2f}%)"
+                            else:
+                                reason = f"ML 매도 (Down={prob_down:.3f})"
+                            
+                            log_msg = (f"[SELL] 매도 | Price: {current_price:,.0f} | "
+                                     f"Profit: {profit_pct:+.2f}% | {reason}")
+                            write_log(log_msg)
+                            
+                            holding = False
+                            buy_price = 0
+                            buy_amount = 0
             
             time.sleep(10)
             

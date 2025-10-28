@@ -34,7 +34,7 @@ def add_multi_timeframe_features(df_1m):
     df = df_1m.copy()
     
     # === 1. 5분봉 리샘플링 ===
-    df_5m = df.resample('5T', label='right', closed='right').agg({
+    df_5m = df.resample('5min', label='right', closed='right').agg({
         'open': 'first',
         'high': 'max',
         'low': 'min',
@@ -46,7 +46,7 @@ def add_multi_timeframe_features(df_1m):
     df_5m['ema50'] = compute_ema(df_5m['close'], 50)
     
     # === 2. 15분봉 리샘플링 ===
-    df_15m = df.resample('15T', label='right', closed='right').agg({
+    df_15m = df.resample('15min', label='right', closed='right').agg({
         'open': 'first',
         'high': 'max',
         'low': 'min',
@@ -59,7 +59,7 @@ def add_multi_timeframe_features(df_1m):
     df_15m['ema200'] = compute_ema(df_15m['close'], 200)
     
     # === 3. 60분봉 리샘플링 ===
-    df_60m = df.resample('60T', label='right', closed='right').agg({
+    df_60m = df.resample('60min', label='right', closed='right').agg({
         'open': 'first',
         'high': 'max',
         'low': 'min',
