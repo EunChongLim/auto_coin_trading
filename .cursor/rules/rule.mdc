@@ -2,6 +2,8 @@
 alwaysApply: true
 ---
 
+중요!!!!:: pyupbit 라이브러리 사용금지
+
 # 비트코인 자동매매 프로젝트 Cursor AI 규칙
 
 ## 프로젝트 개요
@@ -31,6 +33,7 @@ alwaysApply: true
 - ❌ 윈도우 크기 200개 (실거래 손실)
 - ❌ Timezone 누락 (과거 데이터 조회 실패)
 - ❌ `to_param`에서 1초 빼기 (gap 발생)
+- ❌ **룩어헤드 바이어스 (Look-ahead Bias)** - 백테스트에서 미래 정보 사용
 
 ### 4. Upbit API 제한사항
 
@@ -91,8 +94,510 @@ RSI 매도: rsi > 80 AND profit > 0.5%
 - v3.1 변동성 적응형: -4.43% (실패)
 - v3.1 BTC 최적화: 테스트 중
 
-## 중요: 사용자가 "안된다"고 판단하지 말 것
+### 11. 백테스트 설계 원칙 (필수)
+
+#### 룩어헤드 바이어스 절대 금지
+
+**❌ 잘못된 백테스트 (실전 불가능):**
+
+```python
+# row = 1분봉 데이터 (open, high, low, close)
+if row['low'] <= bid_price:
+    매수 체결  # ❌ 사기! low는 1분 끝나야 알 수 있음!
+
+if row['high'] >= ask_price:
+    매도 체결  # ❌ 사기! high도 1분 끝나야 알 수 있음!
+```
+
+**문제점:**
+
+- 1분 중 언제 high/low가 발생했는지 모름
+- 1분봉이 끝난 후에만 high/low를 알 수 있음
+- 실시간에서는 불가능한 거래
+- 백테스트 성과 과대평가 (2~5배 부풀림)
+
+**✅ 올바른 백테스트 (실전 가능):**
+
+```python
+# close만 사용 (실시간에서 알 수 있는 정보)
+current_price = row['close']
+quotes = generate_quotes(current_price)
+
+if current_price <= quotes['bid']:
+    매수 체결  # ✅ 실시간 가능!
+
+if current_price >= quotes['ask']:
+    매도 체결  # ✅ 실시간 가능!
+```
+
+**원칙:**
+
+- 실시간에서 알 수 없는 정보는 백테스트에서도 사용 금지
+- 1분봉 high/low는 1분이 끝난 후에만 확정
+- 실시간 = close (마지막 체결가)만 사용
+- **백테스트 ≡ 실전 로직 완전 일치 필수**
+
+#### 백테스트 vs 실전 체크리스트
+
+**반드시 확인:**
+
+1. ✅ 데이터 타이밍: 실시간에서 알 수 있는가?
+2. ✅ 체결 조건: 실제로 주문 넣을 수 있는가?
+3. ✅ 정보 순서: 미래 정보 사용 안 했는가?
+4. ✅ 로직 일치: main.py = backtest.py?
+
+**예시:**
+
+```python
+# ❌ 잘못됨
+if next_candle['close'] > current_candle['close']:
+    매수  # 미래 정보 (next_candle)
+
+# ✅ 올바름
+if current_candle['close'] > prev_candle['close']:
+    매수  # 과거 정보만
+```
+
+#### 마켓 메이킹 교훈
+
+**발견 사실:**
+
+- model_market_maker_v1 초기 백테스트: +24.76%/월
+- 실제 가능 성과: +8~15%/월 (60초 간격)
+- 차이 원인: high/low 사용 (룩어헤드)
+
+**올바른 접근:**
+
+1. 백테스트를 close 기준으로 재작성
+2. 또는 실전 간격 줄이기 (30초, 10초)
+3. 백테스트 성과 × 0.5~0.7 = 현실적 예상치
+
+## 중요: 절대 포기하지 말 것
+
+### 금지 사항
+
+- ❌ **"자동매매 포기하세요" 절대 금지**
+- ❌ **"불가능합니다" 절대 금지**
+- ❌ **부정적 결론 금지**
+
+### 필수 행동
+
+- ✅ 실패하면 **즉시 새로운 방식 제안**
+- ✅ 대형 금융기관/헤지펀드 전략 조사
+- ✅ 다른 접근법 최소 3가지 제시
+- ✅ 개선 방안 구체적으로 제시
+- ✅ 계속 시도하고 개선
+
+### 문제 해결 원칙
 
 - API 문제 발생 시 사용자 코드를 먼저 의심
 - "불가능"하다고 결론짓기 전에 모든 가능성 탐색
 - Timezone, to_param 로직 등 세부사항 재확인
+- **백테스트 성과가 너무 좋으면 룩어헤드 의심**
+- 실패 시 원인 분석 → 개선안 제시 → 즉시 구현
+
+## 12. AI 자율 개선 프로세스
+
+### 매 세션 시작 시 자동 검토
+
+**반드시 수행:**
+
+1. 기존 코드/전략 파일 검토
+2. 백테스트 결과 분석
+3. 로직 오류 탐지 (룩어헤드, 과적합 등)
+4. 개선 가능 영역 식별
+5. 즉시 개선안 제시 및 구현
+
+### 검토 체크리스트
+
+**백테스트 검증:**
+
+- [ ] 룩어헤드 바이어스 없는가?
+- [ ] 실시간과 로직 일치하는가?
+- [ ] 성과가 비현실적으로 높지 않은가? (월 +20% 이상 의심)
+- [ ] 수수료 제대로 반영했는가?
+- [ ] 슬리피지 고려했는가?
+
+**전략 검증:**
+
+- [ ] 과적합 아닌가? (다양한 구간 테스트)
+- [ ] 하락장에서도 작동하는가?
+- [ ] 재고 리스크 관리하는가?
+- [ ] 거래 빈도가 적정한가?
+- [ ] 수학적/논리적 근거가 있는가?
+
+**코드 품질:**
+
+- [ ] main.py ≡ backtest.py 로직 일치?
+- [ ] 파라미터 동기화되어 있는가?
+- [ ] 로그가 충분한가?
+- [ ] 에러 처리 되어 있는가?
+
+### 개선 우선순위
+
+**실패 발견 시:**
+
+1. 즉시 원인 분석 (룩어헤드, 과적합, 논리 오류)
+2. 3가지 이상 대안 제시
+3. 가장 유망한 방안부터 즉시 구현
+4. 백테스트로 검증
+5. 실패하면 다음 방안 시도
+
+**절대 하지 말 것:**
+
+- ❌ "이 방법도 안 되네요" (X)
+- ❌ "다른 방법 시도해보시겠어요?" (X)
+- ✅ "방법 A 실패. 즉시 방법 B 구현합니다!" (O)
+
+### 새로운 전략 탐색
+
+**실패 시 조사할 전략들:**
+
+1. 통계적 차익거래 (Statistical Arbitrage)
+2. 페어 트레이딩 (Pairs Trading)
+3. 평균회귀 전략 (Mean Reversion)
+4. 모멘텀 브레이크아웃
+5. 변동성 브레이크아웃
+6. DCA 최적화
+7. 옵션 헤징 전략
+8. 호가창 불균형 전략
+9. 김치 프리미엄 차익거래
+10. 자금조달률(Funding Rate) 차익거래
+
+**조사 방법:**
+
+- 대형 헤지펀드 공개 논문
+- 학술 논문 (arXiv, SSRN)
+- 퀀트 트레이딩 커뮤니티
+- 실제 성공 사례
+
+### 반복 개선 사이클
+
+```
+1. 전략 구현
+   ↓
+2. 올바른 백테스트 (룩어헤드 제거)
+   ↓
+3. 실패? → 즉시 다음 전략
+   ↓
+4. 성공? → 추가 검증 (다양한 구간)
+   ↓
+5. 검증 통과? → 파라미터 최적화
+   ↓
+6. 실전 시뮬레이션 (main.py)
+   ↓
+7. 최종 검증 후 실전 또는 다음 개선
+```
+
+**핵심: 멈추지 말고 계속 시도!**
+
+## 13. DCA (Dollar Cost Averaging) 모델
+
+### 규칙
+
+**✅ 현재 상태:**
+
+- model_bollinger_v1/main_dca.py 실행 중
+- 월 수익률: +4~9% (검증됨)
+- 연 수익률: +60~96% (복리)
+- 전략: 8시간마다 매수 + 10% 익절 + 복리
+
+**❌ 절대 금지:**
+
+- DCA 모델 개선/수정/최적화 시도 금지
+- DCA 전략을 다른 전략과 비교 금지
+- DCA를 대안으로 제안 금지
+- DCA 언급 자체를 최소화
+
+**이유:**
+
+- 이미 안정적으로 작동 중
+- 장기 투자 전략으로 자동화 불필요
+- 단기 트레이딩 목표와 무관
+- 사용자가 더 이상 관여 원치 않음
+
+**원칙:**
+
+- DCA는 백그라운드에서 유지
+- 새로운 전략 개발에 집중
+- DCA를 비교 대상으로 사용 금지
+
+## 14. 올바른 ML 학습 및 백테스트 방법론
+
+### 핵심 원칙: 학습 = 백테스트 = 실시간
+
+**절대 규칙:**
+
+- 학습 방식 ≡ 백테스트 방식 ≡ 실시간 방식
+- Feature 계산 방법 100% 일치 필수
+- 통계 범위(윈도우 크기) 완전 동일
+
+---
+
+### ❌ 잘못된 방법 (v5 실패 원인)
+
+#### 문제 1: 통계 범위 불일치
+
+```python
+# 학습 (train.py) - 전체 데이터 방식
+df = load_data("20240101", "20240930")  # 9개월 전체
+df['volume_ratio'] = df['volume'] / df['volume'].rolling(20).mean()
+df['rsi'] = calculate_rsi(df['close'])  # 전체 기간 통계
+model.fit(df)
+
+# 백테스트 (backtest.py) - 전체 데이터 방식
+df = load_data("20220101", "20221231")  # 다른 1년 전체
+df['volume_ratio'] = df['volume'] / df['volume'].rolling(20).mean()
+# → 2022년 통계 기준으로 계산됨!
+
+# 실시간 (main.py) - 슬라이딩 윈도우 방식
+window = deque(maxlen=100)  # 최근 100개만
+volume_ratio = window[-1] / mean(window[-20:])
+# → 최근 100개의 통계만 사용!
+```
+
+**문제점:**
+
+- 학습: 2024년 9개월 전체 통계
+- 백테스트: 2022년 1년 전체 통계
+- 실시간: 최근 100개 통계
+- **→ 완전히 다른 기준으로 계산! 모델 무용지물!**
+
+#### 문제 2: 시장 환경 차이
+
+```
+2022년: 5만불 → 2만불 (하락장, 변동성 높음)
+2024년: 5만불 → 8만불 (상승장, 변동성 낮음)
+
+→ volume_ratio, rsi 등의 분포가 완전히 다름
+→ 2024년 학습 모델이 2022년 데이터 예측 실패
+```
+
+---
+
+### ✅ 올바른 방법 1: Walk-Forward 슬라이딩 윈도우
+
+#### 원칙
+
+```python
+# 고정 윈도우 크기 사용
+TRAIN_WINDOW = 30일  # 학습 윈도우
+TEST_PERIOD = 1일     # 테스트 기간
+
+# 슬라이딩하면서 학습/테스트 반복
+for start_day in range(0, total_days - TRAIN_WINDOW - TEST_PERIOD):
+    # 1. 학습 윈도우
+    train_data = data[start_day : start_day + TRAIN_WINDOW]
+
+    # 2. Feature 계산 (윈도우 내에서만!)
+    train_features = []
+    for i in range(FEATURE_WINDOW, len(train_data)):
+        window = train_data[i-FEATURE_WINDOW:i]
+        features = calculate_features(window)  # 윈도우 내 통계만
+        train_features.append(features)
+
+    # 3. 모델 학습
+    model.fit(train_features)
+
+    # 4. 다음 날 예측
+    test_day = data[start_day + TRAIN_WINDOW]
+    # 테스트도 동일한 윈도우 방식 사용
+```
+
+#### 구현 예시
+
+```python
+def calculate_features_window(window_data):
+    """
+    고정된 윈도우에서만 Feature 계산
+
+    Args:
+        window_data: 최근 N개 캔들 (예: 100개)
+
+    Returns:
+        최신 시점의 Feature 값
+    """
+    df = pd.DataFrame(window_data)
+
+    # 거래량 비율 (최근 20개 평균 대비)
+    volume_ratio = df['volume'].iloc[-1] / df['volume'].tail(20).mean()
+
+    # RSI (최근 20개로 계산)
+    rsi = calculate_rsi(df['close'].tail(20))
+
+    # MACD (최근 26개로 계산)
+    macd = calculate_macd(df['close'].tail(26))
+
+    # ... 모든 지표를 윈도우 내에서만 계산
+
+    return features
+
+
+def train_walk_forward(data, train_window=30, feature_window=100):
+    """Walk-Forward 학습"""
+    results = []
+
+    for start in range(0, len(data) - train_window):
+        train_data = data[start : start + train_window]
+
+        # 슬라이딩 윈도우로 Feature 생성
+        X_train, y_train = [], []
+        for i in range(feature_window, len(train_data)):
+            window = train_data[i-feature_window : i]
+            features = calculate_features_window(window)
+            target = (train_data[i]['close'] - train_data[i-1]['close']) / train_data[i-1]['close'] * 100
+
+            X_train.append(features)
+            y_train.append(target)
+
+        # 학습
+        model.fit(X_train, y_train)
+
+        # 다음 날 테스트
+        test_window = data[start + train_window - feature_window : start + train_window]
+        test_features = calculate_features_window(test_window)
+        prediction = model.predict(test_features)
+
+        results.append({
+            'prediction': prediction,
+            'actual': ...
+        })
+
+    return results
+```
+
+---
+
+### ✅ 올바른 방법 2: Online Learning (점진적 학습)
+
+#### 원칙
+
+```python
+# 초기 모델 학습
+model = train_initial(data[:30일])
+
+# 매일 업데이트
+for day in data[30일:]:
+    # 1. 예측
+    prediction = model.predict(day)
+
+    # 2. 실제 결과 확인
+    actual = get_actual_result(day)
+
+    # 3. 모델 업데이트
+    model.partial_fit([day_features], [actual])
+```
+
+---
+
+### ✅ 올바른 방법 3: Time Series Split
+
+#### 원칙
+
+```python
+from sklearn.model_selection import TimeSeriesSplit
+
+# 시계열 교차 검증
+tscv = TimeSeriesSplit(n_splits=5)
+
+for train_idx, test_idx in tscv.split(X):
+    X_train, X_test = X[train_idx], X[test_idx]
+    y_train, y_test = y[train_idx], y[test_idx]
+
+    # 각 fold마다 학습/평가
+    model.fit(X_train, y_train)
+    score = model.score(X_test, y_test)
+```
+
+---
+
+### 백테스트 체크리스트
+
+**실행 전 필수 확인:**
+
+- [ ] Feature 계산 방법이 학습/백테스트/실시간 모두 동일한가?
+- [ ] 윈도우 크기가 학습/백테스트/실시간 모두 동일한가?
+- [ ] 통계 범위(rolling mean, std 등)가 모두 동일한가?
+- [ ] 백테스트에서 미래 정보(look-ahead) 사용하지 않았는가?
+- [ ] 실시간과 동일한 순서로 데이터 처리하는가?
+- [ ] 다양한 시장 환경(상승장, 하락장, 횡보장)에서 테스트했는가?
+- [ ] 2개 이상의 다른 기간으로 검증했는가?
+
+---
+
+### 실패 사례 기록
+
+**v5 모델 (2024년 학습 → 2022년 테스트):**
+
+```
+결과: -100% (파산)
+원인:
+1. 전체 데이터 통계 vs 윈도우 통계 불일치
+2. 2024년 상승장 학습 → 2022년 하락장 적용
+3. 거래 폭발 (일 53회, 목표 1~3회)
+4. 승률 35% (목표 50%+)
+
+교훈:
+- 과거 다른 시장 환경은 무조건 재학습 필요
+- 전체 데이터 방식은 실시간과 불일치
+- 슬라이딩 윈도우 방식만 사용할 것
+```
+
+---
+
+### 권장 구조
+
+```
+model_xxx/
+├── Common/
+│   ├── features.py          # Feature 계산 (윈도우 방식)
+│   └── window_manager.py    # 슬라이딩 윈도우 관리
+├── train_walk_forward.py    # Walk-Forward 학습
+├── backtest_walk_forward.py # Walk-Forward 백테스트
+├── main.py                  # 실시간 (동일 윈도우 방식)
+└── validate_consistency.py  # 3가지 방식 일치 검증
+```
+
+---
+
+### 핵심 요약
+
+**절대 규칙:**
+
+```python
+# ❌ 금지
+df['rsi'] = calculate_rsi(df['close'])  # 전체 데이터
+
+# ✅ 필수
+window = data[-100:]  # 고정 윈도우
+features['rsi'] = calculate_rsi(window['close'])  # 윈도우만
+```
+
+**검증 방법:**
+
+```python
+# 학습, 백테스트, 실시간의 Feature가 동일한지 확인
+assert train_features == backtest_features == realtime_features
+```
+
+**금언:**
+
+> "백테스트 수익률이 좋아도, 실시간 방식과 다르면 무용지물!"
+> "과거가 다른 시장이면, 모델도 다르게 학습해야!"
+
+---
+
+### 학습/백테스트 데이터 기준 (v6, v7)
+
+**고정 규칙:**
+```
+학습: 2024년 전체 (20240101 ~ 20241231)
+백테스트1: 2022년 전체 (20220101 ~ 20221231) - 하락장 검증
+백테스트2: 2025년 최근 (20250801 ~ 20251031) - 최신 데이터 검증
+```
+
+**이유:**
+- 2024년은 충분한 데이터 (1년 전체)
+- 2022년은 다른 시장 환경 (하락장) - 일반화 검증
+- 2025년은 최신 패턴 검증
+- 3가지 환경에서 모두 수익 = 강건한 모델
